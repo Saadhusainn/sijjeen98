@@ -1,0 +1,84 @@
+name: Telegram PDF to GitHub
+
+on:
+  repository_dispatch:
+    types: [telegram-pdf]
+
+jobs:
+  process-pdf:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Download PDF
+        run: |
+          # Create pdfs directory
+          mkdir -p pdfs
+          
+          # Configure git
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@users.noreply.github.com"
+          
+          # Pull latest changes to avoid conflicts
+          git pull --rebase
+          
+          # Get filename from payload
+          CLEAN_FILENAME="${{ github.event.client_payload.file_name }}"
+          PDF_FILENAME="pdfs/${CLEAN_FILENAME}"
+          
+          echo "Downloading PDF..."
+          echo "From: ${{ github.event.client_payload.pdf_url }}"
+          echo "Saving as: $PDF_FILENAME"
+          echo "Repository: ${{ github.repository }}"
+          
+          # Download PDF (works for both Telegram files and direct links)
+          curl -L --progress-bar "${{ github.event.client_payload.pdf_url }}" -o "$PDF_FILENAME"
+          
+          # Check if download was successful
+          if [ -f "$PDF_FILENAME" ]; then
+            echo "✅ PDF downloaded successfully"
+            echo "File size: $(ls -lh "$PDF_FILENAME" | cut -d ' ' -f 5)"
+            
+            # Add, commit and push
+            git add .
+            git commit -m "Add PDF: $CLEAN_FILENAME"
+            
+            # Pull any new changes before pushing
+            git pull --rebase
+            
+            # Push to repository
+            git push
+            
+            echo "✅ PDF committed successfully to ${{ github.repository }}"
+          else
+            echo "❌ Failed to download PDF"
+            echo "Current directory: $(pwd)"
+            echo "Files in pdfs/: $(ls -la pdfs/ 2>/dev/null || echo 'Directory not found')"
+            exit 1
+          fi
+
+      - name: Send completion notification
+        run: |
+          CHAT_ID="${{ github.event.client_payload.chat_id }}"
+          FILENAME="${{ github.event.client_payload.file_name }}"
+          REPO_NAME="${{ github.event.client_payload.repo_name }}"
+          REPO_OWNER="${{ github.event.client_payload.repo_owner }}"
+          
+          if [ -n "$CHAT_ID" ]; then
+            echo "Sending notification to chat: $CHAT_ID"
+            
+            # Create notification message
+            MESSAGE="✅ Upload Complete!%0A%0A• File: $FILENAME%0A• Repository: $REPO_NAME%0A• Status: Successfully uploaded!%0A%0A📁 View: https://github.com/$REPO_OWNER/$REPO_NAME/tree/main/pdfs"
+            
+            # Send Telegram notification
+            curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+              -d "chat_id=$CHAT_ID" \
+              -d "text=$MESSAGE"
+            
+            echo "✅ Notification sent"
+          else
+            echo "No chat ID provided, skipping notification"
+          fi
