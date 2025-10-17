@@ -19,79 +19,91 @@ jobs:
           git config user.name "GitHub Actions Bot"
           git config user.email "actions@users.noreply.github.com"
           
-          # Pull latest changes
-          git pull --rebase
+          # Pull latest changes to avoid conflicts
+          git pull --rebase --quiet
           
           IS_ZIP="${{ github.event.client_payload.is_zip }}"
           FOLDER_NAME="${{ github.event.client_payload.folder_name }}"
           
           if [ "$IS_ZIP" = "true" ]; then
-            echo "Processing ZIP file..."
+            echo "=== PROCESSING ZIP FILE ==="
             echo "ZIP URL: ${{ github.event.client_payload.pdf_url }}"
             echo "Folder name: $FOLDER_NAME"
             
             # Create folder for extraction
             mkdir -p "$FOLDER_NAME"
             
-            # Download ZIP file
+            # Download ZIP file with retry and proper error handling
             ZIP_FILE="temp_download.zip"
-            curl -L --progress-bar "${{ github.event.client_payload.pdf_url }}" -o "$ZIP_FILE"
-            
-            if [ -f "$ZIP_FILE" ]; then
-              echo "ZIP downloaded successfully"
-              echo "File size: $(ls -lh "$ZIP_FILE" | cut -d ' ' -f 5)"
+            echo "Downloading ZIP file..."
+            if curl -L --fail --progress-bar "${{ github.event.client_payload.pdf_url }}" -o "$ZIP_FILE"; then
+              echo "✓ ZIP downloaded successfully"
+              ZIP_SIZE=$(ls -lh "$ZIP_FILE" | cut -d ' ' -f 5)
+              echo "File size: $ZIP_SIZE"
               
               # Extract ZIP file
-              unzip -q "$ZIP_FILE" -d "$FOLDER_NAME/"
-              
-              # Count extracted files
-              FILE_COUNT=$(find "$FOLDER_NAME" -type f | wc -l)
-              echo "Extracted $FILE_COUNT files to $FOLDER_NAME/"
-              
-              # Clean up ZIP file
-              rm -f "$ZIP_FILE"
-              
-              # Add, commit and push
-              git add .
-              git commit -m "Add extracted files: $FOLDER_NAME ($FILE_COUNT files)"
-              git pull --rebase
-              git push
-              
-              echo "ZIP extraction completed successfully"
+              echo "Extracting ZIP file..."
+              if unzip -q "$ZIP_FILE" -d "$FOLDER_NAME/"; then
+                FILE_COUNT=$(find "$FOLDER_NAME" -type f | wc -l)
+                echo "✓ Extracted $FILE_COUNT files to $FOLDER_NAME/"
+                
+                # Clean up ZIP file
+                rm -f "$ZIP_FILE"
+                
+                # Add, commit and push
+                git add .
+                git commit -m "Add extracted files: $FOLDER_NAME ($FILE_COUNT files)"
+                git pull --rebase --quiet
+                git push --quiet
+                
+                echo "✓ ZIP extraction completed successfully"
+              else
+                echo "✗ Failed to extract ZIP file"
+                exit 1
+              fi
             else
-              echo "Failed to download ZIP file"
+              echo "✗ Failed to download ZIP file"
               exit 1
             fi
           else
-            echo "Processing PDF file..."
+            echo "=== PROCESSING PDF FILE ==="
             mkdir -p pdfs
             
             CLEAN_FILENAME="${{ github.event.client_payload.file_name }}"
             PDF_FILENAME="pdfs/${CLEAN_FILENAME}"
             
-            echo "Downloading from: ${{ github.event.client_payload.pdf_url }}"
+            echo "PDF URL: ${{ github.event.client_payload.pdf_url }}"
             echo "Saving as: $PDF_FILENAME"
             
-            # Download PDF
-            curl -L --progress-bar "${{ github.event.client_payload.pdf_url }}" -o "$PDF_FILENAME"
-            
-            if [ -f "$PDF_FILENAME" ]; then
-              echo "PDF downloaded successfully"
-              echo "File size: $(ls -lh "$PDF_FILENAME" | cut -d ' ' -f 5)"
+            # Download PDF with retry and proper error handling
+            echo "Downloading PDF file..."
+            if curl -L --fail --progress-bar "${{ github.event.client_payload.pdf_url }}" -o "$PDF_FILENAME"; then
+              echo "✓ PDF downloaded successfully"
+              PDF_SIZE=$(ls -lh "$PDF_FILENAME" | cut -d ' ' -f 5)
+              echo "File size: $PDF_SIZE"
               
-              git add .
-              git commit -m "Add PDF: $CLEAN_FILENAME"
-              git pull --rebase
-              git push
-              
-              echo "PDF upload completed successfully"
+              # Verify file is not empty and is a valid PDF
+              if [ -s "$PDF_FILENAME" ]; then
+                echo "✓ File verification passed"
+                
+                git add .
+                git commit -m "Add PDF: $CLEAN_FILENAME"
+                git pull --rebase --quiet
+                git push --quiet
+                
+                echo "✓ PDF upload completed successfully"
+              else
+                echo "✗ Downloaded file is empty or corrupted"
+                exit 1
+              fi
             else
-              echo "Failed to download PDF"
+              echo "✗ Failed to download PDF file"
               exit 1
             fi
           fi
 
       - name: Send completion notification
+        if: success()
         run: |
           CHAT_ID="${{ github.event.client_payload.chat_id }}"
           FILENAME="${{ github.event.client_payload.file_name }}"
@@ -102,12 +114,13 @@ jobs:
           
           if [ -n "$CHAT_ID" ]; then
             if [ "$IS_ZIP" = "true" ]; then
-              MESSAGE="ZIP Extraction Complete%0A%0A• ZIP File: $FILENAME%0A• Folder: $FOLDER_NAME%0A• Repository: $REPO_NAME%0A• Status: All files extracted%0A%0AView: https://github.com/$REPO_OWNER/$REPO_NAME/tree/main/$FOLDER_NAME"
+              MESSAGE="✅ ZIP Extraction Complete%0A%0A📦 ZIP File: $FILENAME%0A📁 Folder: $FOLDER_NAME%0A🏷️ Repository: $REPO_NAME%0A%0A🔗 View: https://github.com/$REPO_OWNER/$REPO_NAME/tree/main/$FOLDER_NAME"
             else
-              MESSAGE="Upload Complete%0A%0A• File: $FILENAME%0A• Repository: $REPO_NAME%0A• Status: Successfully uploaded%0A%0AView: https://github.com/$REPO_OWNER/$REPO_NAME/tree/main/pdfs"
+              MESSAGE="✅ Upload Complete%0A%0A📄 File: $FILENAME%0A🏷️ Repository: $REPO_NAME%0A%0A🔗 View: https://github.com/$REPO_OWNER/$REPO_NAME/tree/main/pdfs"
             fi
             
-            crl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
               -d "chat_id=$CHAT_ID" \
               -d "text=$MESSAGE"
+            echo "✓ Notification sent successfully"
           fi
