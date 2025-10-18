@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>We are cooking...</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <style>
+        body {
+            background: #0a0a0a;
+            color: white;
+            font-family: 'Arial', sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <section class="relative flex items-center justify-center h-screen text-center">
+        <div class="absolute inset-0 bg-gradient-to-r from-purple-600 to-blue-500 opacity-30"></div>
+        <div class="relative z-10">
+            <h1 class="text-5xl font-bold mb-4 animate-fadeIn">Welcome to the Future</h1>
+            <p class="text-lg mb-6">Your journey starts here. Elevate your experience.</p>
+            <a href="#features" class="bg-blue-600 px-6 py-3 rounded-lg text-white text-lg hover:bg-blue-700 transition-all shadow-lg border border-white">
+                Get Started
+            </a>
+        </div>
+    </section>
+
+    <section id="features" class="py-20 px-10 text-center">
+        <h2 class="text-4xl font-bold mb-10">Why Choose Us?</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-10">
+            <div class="p-6 bg-gray-900 rounded-lg shadow-lg">
+                <h3 class="text-xl font-semibold mb-2">🚀 Fast & Optimized</h3>
+                <p>Lightning-fast performance for an unforgettable user experience.</p>
+            </div>
+            <div class="p-6 bg-gray-900 rounded-lg shadow-lg">
+                <h3 class="text-xl font-semibold mb-2">🎨 Stunning Design</h3>
+                <p>Aesthetically pleasing visuals with a sleek, modern feel.</p>
+            </div>
+            <div class="p-6 bg-gray-900 rounded-lg shadow-lg">
+                <h3 class="text-xl font-semibold mb-2">🔒 Secure & Reliable</h3>
+                <p>Top-tier security measures to protect your data at all costs.</p>
+            </div>
+        </div>
+    </section>
+
+    <footer class="py-10 text-center bg-gray-800">
+        <p>Made with ❤️ by OKiU Network</p>
+    </footer>
+
+    <script>
+        gsap.from("h1", { duration: 1.2, opacity: 0, y: -50, ease: "power2.out" });
+        gsap.from("p", { duration: 1.5, opacity: 0, y: 30, delay: 0.3 });
+        gsap.from("a", { duration: 1, opacity: 0, scale: 0.8, delay: 0.5 });
+    </script>
+</body>
+</html>
